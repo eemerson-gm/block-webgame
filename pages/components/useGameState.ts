@@ -1,5 +1,6 @@
 import { Application, Assets, Sprite, Texture, Ticker } from "pixi.js";
 import { useEffect, useRef } from "react";
+import { Tilemap } from "../classes/Tilemap";
 
 interface GameObject {
   id: number;
@@ -12,7 +13,7 @@ interface useGameStateProps {
   viewHeight: number;
   stageWidth: number;
   stageHeight: number;
-  onGameStart?: () => void;
+  onGameStart?: (game: Application) => void;
 }
 
 const useGameState = ({
@@ -38,8 +39,34 @@ const useGameState = ({
       game.current.stage.scale.y = viewHeight / stageHeight;
       document.getElementById("game-canvas")?.appendChild(game.current.canvas);
     };
-    startGame().then(onGameStart).catch(console.error);
+    startGame()
+      .then(() => {
+        if (onGameStart && game.current) {
+          onGameStart(game.current);
+        }
+      })
+      .catch(console.error);
   }, [onGameStart, stageHeight, stageWidth, viewHeight, viewWidth]);
+
+  const createSprite = async (spritePath: string) => {
+    const texture = (await Assets.load(spritePath)) as Texture;
+    const sprite = new Sprite(texture);
+    sprite.texture.source.scaleMode = "nearest";
+    return sprite;
+  };
+
+  const createTilemap = async (width: number, height: number) => {
+    if (!game.current) return;
+    const tilemap = new Tilemap(game.current, width, height);
+    return tilemap;
+  };
+
+  const addSprite = async (x: number, y: number, spritePath: string) => {
+    const sprite = await createSprite(spritePath);
+    sprite.position.x = x;
+    sprite.position.y = y;
+    game.current?.stage.addChild(sprite);
+  };
 
   const addObject = async (
     x: number,
@@ -55,11 +82,9 @@ const useGameState = ({
   ) => {
     if (!game.current) return;
     const objId = ++uniqueId.current;
-    const texture = (await Assets.load(spritePath)) as Texture;
-    const sprite = new Sprite(texture);
+    const sprite = await createSprite(spritePath);
     sprite.position.x = x;
     sprite.position.y = y;
-    sprite.texture.source.scaleMode = "nearest";
     game.current?.stage.addChild(sprite);
     const { onCreate, onStep } = getOptions(objId, sprite);
     if (onCreate) {
@@ -74,6 +99,12 @@ const useGameState = ({
       onStep,
     });
     return uniqueId.current;
+  };
+
+  const removeSprite = (sprite: Sprite) => {
+    if (!game.current) return;
+    game.current.stage.removeChild(sprite);
+    sprite.destroy();
   };
 
   const removeObject = (id: number) => {
@@ -116,8 +147,12 @@ const useGameState = ({
   };
 
   return {
+    addSprite,
     addObject,
+    removeSprite,
     removeObject,
+    createSprite,
+    createTilemap,
     addKeyPressEvent,
     addKeyReleaseEvent,
     addKeyHoldEvent,
