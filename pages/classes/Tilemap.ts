@@ -1,8 +1,8 @@
-import { Application, Sprite } from "pixi.js";
+import { Application, AnimatedSprite } from "pixi.js";
 
 export class Tilemap {
   game: Application;
-  tiles: (Sprite | null)[][];
+  tiles: (AnimatedSprite | null)[][];
 
   constructor(game: Application, width: number, height: number) {
     this.game = game;
@@ -19,7 +19,7 @@ export class Tilemap {
     return this.tiles[x][y];
   }
 
-  setTile(x: number, y: number, sprite: Sprite | null) {
+  setTile(x: number, y: number, sprite: AnimatedSprite | null) {
     const spriteTile = this.tiles[x][y];
     if (spriteTile) {
       this.game.stage.removeChild(spriteTile);

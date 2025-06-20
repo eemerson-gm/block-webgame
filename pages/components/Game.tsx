@@ -13,6 +13,8 @@ const approach = (start: number, end: number, amount: number) => {
 
 export default function Game() {
   const {
+    loadSpriteTexture,
+    getSpriteTexture,
     createTilemap,
     createSprite,
     addObject,
@@ -24,29 +26,38 @@ export default function Game() {
     viewHeight: 540,
     stageWidth: 320,
     stageHeight: 180,
-    onGameStart: () => {
+    onGameStart: async () => {
       const tilemapWidth = 320 / 16;
       const tilemapHeight = 180 / 16;
+      await loadSpriteTexture("block");
+      await loadSpriteTexture("player");
+      await loadSpriteTexture("player_walk", 2);
       createTilemap(tilemapWidth, tilemapHeight).then((tilemap) => {
         if (!tilemap) return;
         for (let x = 0; x < tilemapWidth; x++) {
           for (let y = 8; y < tilemapHeight; y++) {
-            createSprite("block.png").then((sprite) => {
+            createSprite("block").then((sprite) => {
               if (!sprite) return;
               tilemap.setTile(x, y, sprite);
             });
           }
         }
+        createSprite("block").then((sprite) => {
+          if (!sprite) return;
+          tilemap.setTile(4, 7, sprite);
+        });
 
-        addObject(0, 0, "frog.png", (id, sprite) => {
+        addObject(0, 0, "player", (id, sprite) => {
           const speed = 1;
           const accel = 0.3;
+          const gravity = 0.2;
+          let x = 0;
+          let y = 0;
           let hspeed = 0;
           let vspeed = 0;
           let key_left = false;
           let key_right = false;
           let key_jump = false;
-          let isGrounded = false;
           return {
             onCreate: () => {
               addKeyHoldEvent("a", (is_held) => {
@@ -64,24 +75,25 @@ export default function Game() {
             },
             onStep: (ticker) => {
               const deltaTime = ticker.deltaTime;
+              const key_sign = Number(key_right) - Number(key_left);
 
-              hspeed = approach(
-                hspeed,
-                (Number(key_right) - Number(key_left)) * speed,
-                accel
-              );
+              if (key_sign !== 0) {
+                sprite.textures = getSpriteTexture("player_walk");
+                sprite.scale.x = key_sign;
+              }
+              hspeed = approach(hspeed, key_sign * speed, accel);
 
               const tile_meeting = (x: number, y: number, tilemap: Tilemap) => {
-                const originalX = sprite.x;
-                const originalY = sprite.y;
+                const originalX = x;
+                const originalY = y;
 
-                sprite.x = x;
-                sprite.y = y;
+                x = x;
+                y = y;
 
-                const sprite_top = sprite.y;
-                const sprite_bottom = sprite.y + sprite.height;
-                const sprite_left = sprite.x;
-                const sprite_right = sprite.x + sprite.width;
+                const sprite_top = y;
+                const sprite_bottom = y + sprite.height;
+                const sprite_left = x;
+                const sprite_right = x + sprite.width;
 
                 const collision =
                   tilemap.getTile(
@@ -101,51 +113,52 @@ export default function Game() {
                     Math.floor(sprite_bottom / 16)
                   );
 
-                sprite.x = originalX;
-                sprite.y = originalY;
+                x = originalX;
+                y = originalY;
 
                 return collision !== null;
               };
 
-              vspeed += 0.1;
+              vspeed += gravity;
 
-              if (tile_meeting(sprite.x + hspeed, sprite.y, tilemap)) {
+              if (tile_meeting(x + hspeed, y, tilemap)) {
                 let counter = 0;
                 while (
-                  !tile_meeting(
-                    sprite.x + Math.sign(hspeed),
-                    sprite.y,
-                    tilemap
-                  ) &&
+                  !tile_meeting(x + Math.sign(hspeed), y, tilemap) &&
                   counter++ < 16
                 ) {
-                  sprite.x += Math.sign(hspeed);
+                  x += Math.sign(hspeed);
                 }
                 hspeed = 0;
               }
 
-              if (tile_meeting(sprite.x, sprite.y + vspeed, tilemap)) {
+              if (tile_meeting(x, y + vspeed, tilemap)) {
                 let counter = 0;
                 while (
-                  !tile_meeting(
-                    sprite.x,
-                    sprite.y + Math.sign(vspeed),
-                    tilemap
-                  ) &&
+                  !tile_meeting(x, y + Math.sign(vspeed), tilemap) &&
                   counter++ < 16
                 ) {
-                  sprite.y += Math.sign(vspeed);
+                  y += Math.sign(vspeed);
                 }
+                y = Math.round(y / 16) * 16 - gravity;
                 vspeed = 0;
               }
 
-              const isGrounded = tile_meeting(sprite.x, sprite.y + 1, tilemap);
+              const isGrounded = tile_meeting(x, y + 1, tilemap);
               if (isGrounded && key_jump) {
                 vspeed = -3;
               }
 
-              sprite.x += hspeed * deltaTime;
-              sprite.y += vspeed * deltaTime;
+              x += hspeed * deltaTime;
+              y += vspeed * deltaTime;
+
+              if (sprite.scale.x == 1) {
+                sprite.position.x = x;
+                sprite.position.y = y;
+              } else {
+                sprite.position.x = x + sprite.width;
+                sprite.position.y = y;
+              }
             },
           };
         });
