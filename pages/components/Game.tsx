@@ -14,7 +14,7 @@ const approach = (start: number, end: number, amount: number) => {
 export default function Game() {
   const {
     loadSpriteTexture,
-    getSpriteTexture,
+    changeSprite,
     createTilemap,
     createSprite,
     addObject,
@@ -31,6 +31,7 @@ export default function Game() {
       const tilemapHeight = 180 / 16;
       await loadSpriteTexture("block");
       await loadSpriteTexture("player");
+      await loadSpriteTexture("player_jump");
       await loadSpriteTexture("player_walk", 2);
       createTilemap(tilemapWidth, tilemapHeight).then((tilemap) => {
         if (!tilemap) return;
@@ -47,8 +48,8 @@ export default function Game() {
           tilemap.setTile(4, 7, sprite);
         });
 
-        addObject(0, 0, "player", (id, sprite) => {
-          const speed = 1;
+        addObject(0, 0, "player", (objId, sprite) => {
+          const speed = 1.5;
           const accel = 0.3;
           const gravity = 0.2;
           let x = 0;
@@ -70,19 +71,10 @@ export default function Game() {
                 key_jump = is_held;
               });
               addKeyPressEvent("f", () => {
-                removeObject(id);
+                removeObject(objId);
               });
             },
             onStep: (ticker) => {
-              const deltaTime = ticker.deltaTime;
-              const key_sign = Number(key_right) - Number(key_left);
-
-              if (key_sign !== 0) {
-                sprite.textures = getSpriteTexture("player_walk");
-                sprite.scale.x = key_sign;
-              }
-              hspeed = approach(hspeed, key_sign * speed, accel);
-
               const tile_meeting = (x: number, y: number, tilemap: Tilemap) => {
                 const originalX = x;
                 const originalY = y;
@@ -119,6 +111,19 @@ export default function Game() {
                 return collision !== null;
               };
 
+              const deltaTime = ticker.deltaTime;
+              const key_sign = Number(key_right) - Number(key_left);
+              const isGrounded = tile_meeting(x, y + 1, tilemap);
+
+              if (key_sign !== 0 && isGrounded) {
+                changeSprite(objId, "player_walk");
+                sprite.scale.x = key_sign;
+              } else if (isGrounded) {
+                changeSprite(objId, "player");
+              } else {
+                changeSprite(objId, "player_jump");
+              }
+              hspeed = approach(hspeed, key_sign * speed, accel);
               vspeed += gravity;
 
               if (tile_meeting(x + hspeed, y, tilemap)) {
@@ -129,6 +134,7 @@ export default function Game() {
                 ) {
                   x += Math.sign(hspeed);
                 }
+                x = Math.round(x / 16) * 16 - Math.sign(hspeed) * 0.1;
                 hspeed = 0;
               }
 
@@ -144,7 +150,6 @@ export default function Game() {
                 vspeed = 0;
               }
 
-              const isGrounded = tile_meeting(x, y + 1, tilemap);
               if (isGrounded && key_jump) {
                 vspeed = -3;
               }

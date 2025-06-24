@@ -11,6 +11,7 @@ import { Tilemap } from "../classes/Tilemap";
 
 interface GameObject {
   id: number;
+  spriteName: string;
   sprite: AnimatedSprite;
   onStep: ((time: Ticker) => void) | undefined;
 }
@@ -33,7 +34,7 @@ const useGameState = ({
   const uniqueId = useRef<number>(0);
   const game = useRef<Application>(null);
   const gameObjects = useRef<GameObject[]>([]);
-  const gameSprites = useRef<{ [id: string]: AnimatedSpriteFrames }>({});
+  const gameSprites = useRef<{ [id: string]: Texture[] }>({});
   useEffect(() => {
     const startGame = async () => {
       game.current = new Application();
@@ -58,6 +59,9 @@ const useGameState = ({
 
   const createSprite = async (spriteName: string) => {
     const textures = gameSprites.current[spriteName];
+    textures.forEach((texture) => {
+      texture.source.scaleMode = "nearest";
+    });
     const sprite = new AnimatedSprite(textures);
     sprite.texture.source.scaleMode = "nearest";
     return sprite;
@@ -73,31 +77,52 @@ const useGameState = ({
     if (!frameCount) {
       const texture = await Assets.load(`${spriteName}.png`);
       gameSprites.current[spriteName] = [texture];
+      console.log(`Loaded sprite '${spriteName}':`, texture);
       return;
     }
     const textures = await Promise.all(
       Array.from({ length: frameCount }, (_, i) =>
         Assets.load(`${spriteName}${i + 1}.png`)
-      )
+      ) as Promise<Texture>[]
     );
     gameSprites.current[spriteName] = textures;
+    console.log(`Loaded ${spriteName}:`, textures);
   };
 
   const getSpriteTexture = (spriteName: string) => {
     return gameSprites.current[spriteName];
   };
 
-  const addSprite = async (x: number, y: number, spritePath: string) => {
-    const sprite = await createSprite(spritePath);
+  const addSprite = async (x: number, y: number, spriteName: string) => {
+    const sprite = await createSprite(spriteName);
     sprite.position.x = x;
     sprite.position.y = y;
     game.current?.stage.addChild(sprite);
   };
 
+  const changeSprite = (
+    objId: number,
+    spriteName: string,
+    speed: number = 0.15
+  ) => {
+    const obj = getObject(objId);
+    if (!obj) return;
+    if (obj.spriteName === spriteName) return;
+    const textures = getSpriteTexture(spriteName);
+    const sprite = obj.sprite;
+    textures.forEach((texture) => {
+      texture.source.scaleMode = "nearest";
+    });
+    sprite.textures = textures;
+    sprite.animationSpeed = speed;
+    sprite.play();
+    obj.spriteName = spriteName;
+  };
+
   const addObject = async (
     x: number,
     y: number,
-    spritePath: string,
+    spriteName: string,
     getOptions: (
       id: number,
       sprite: AnimatedSprite
@@ -108,7 +133,7 @@ const useGameState = ({
   ) => {
     if (!game.current) return;
     const objId = ++uniqueId.current;
-    const sprite = await createSprite(spritePath);
+    const sprite = await createSprite(spriteName);
     sprite.position.x = x;
     sprite.position.y = y;
     game.current?.stage.addChild(sprite);
@@ -121,10 +146,15 @@ const useGameState = ({
     }
     gameObjects.current.push({
       id: objId,
+      spriteName,
       sprite,
       onStep,
     });
     return uniqueId.current;
+  };
+
+  const getObject = (id: number) => {
+    return gameObjects.current.find((obj) => obj.id === id);
   };
 
   const removeSprite = (sprite: AnimatedSprite) => {
@@ -181,6 +211,7 @@ const useGameState = ({
     removeObject,
     createSprite,
     createTilemap,
+    changeSprite,
     addKeyPressEvent,
     addKeyReleaseEvent,
     addKeyHoldEvent,
